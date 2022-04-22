@@ -1,3 +1,4 @@
+#encoding:utf-8
 import io
 import pycurl
 import json,random
@@ -7,14 +8,20 @@ import pandas as pd
 from tqdm import tqdm
 import time
 
+# provice到ES index之间的映射 
+pro_index = {"江苏":"faq_jszx_sz", "山东":"faq_sdzx_sz", "福建":"faq_fjzx_sz", "湖北":"faq_hubeizx_sz", "浙江":"faq_zjzx_sz", "山西":"faq_sx035zx_sz", "云南":"faq_ynzx_sz", "江西":"faq_jxzx_sz", "陕西":"faq_sx029zx_sz", "河北":"faq_hebeizx_sz"}
+# ES info
+IP_PORT='192.168.98.203:9202'
+PASSWD='test:123456'
+
 def get_log_time():
     return datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')+':  '+__file__+':'
 
 class Eshelper():
-    def __init__(self,hosts,userpwd,timeout):
+    def __init__(self,hosts,userpwd):
         self.hosts = hosts
         self.userpwd = userpwd
-        self.timeout = timeout
+        self.timeout = 60
     
     def curlwrapper(self,url,postdata):
         s = io.BytesIO()
@@ -93,106 +100,89 @@ class Eshelper():
         return result
 
 if __name__ == '__main__':
-    # provice到ES index之间的映射 
-    pro_index = {"江苏":"faq_jszx_sz", "山东":"faq_sdzx_sz", "福建":"faq_fjzx_sz", "湖北":"faq_hubeizx_sz", "浙江":"faq_zjzx_sz", "山西":"faq_sx035zx_sz", "云南":"faq_ynzx_sz", "江西":"faq_jxzx_sz", "陕西":"faq_sx029zx_sz", "河北":"faq_hebeizx_sz"}
-    es = Eshelper(['192.168.98.203:9202'],'test:123456',1)
-    df = pd.read_csv(sys.argv[1]) 
+    es = Eshelper([IP_PORT],PASSWD)
+    df = pd.read_csv("original_datas.csv")
+    print(df.head()) 
     # 数据格式
     # query,post,label,provice,ori
     res = []
     res2 = []
     n = 0
-    f = open('9out.txt','w')
+    f = open('output.txt','w')
     for i in tqdm(df.index):
         n += 1
-        line = []
         query= str(df.loc[i,'query'])
         post = str(df.loc[i,'post'])
         ori = str(df.loc[i,'ori'])
         #构建负例
-        
-        postdata = '{"query":{"bool":{"must":[{"match":{"post":"%s"}}],"must_not": \
-                            [{"term":{"originalPost.keyword":"%s"}}]}},"size":60}'%(post,ori)
         label = str(df.loc[i, 'label'])
         provice = str(df.loc[i, 'provice'])
         index = pro_index[provice]
         if index == "":
             continue
         if(label== '1'):
-             postdata = '{"query":{"bool":{"must":[{"match":{"post":"%s"}}],"must_not": \
-                             [{"term":{"originalPost.keyword":"%s"}}]}},"size":60}'%(post,ori)
+            postdata = '{"query":{"bool":{"must":[{"match":{"post":"%s"}}],"must_not": \
+                             [{"term":{"originalPost.keyword":"%s"}}]}}, "size":100}'%(post,ori)
             es_res = es.get_single_data(index,postdata)
-            #print(es_res)
             if len(es_res) == 0:
-                f.write(query+','+ori+'\n')
+                f.write(query+','+ori+','+"label为1没有负列。"+'\n')
                 continue
-
-            length = len(es_res)
-            neg_num = 0          
-            for j in range(length-1):
+	    # 去三分之一 到 二分之一之间的负列
+            for j in range(len(es_res)//3, len(es_res)//2):
                 hits = es_res[j]
-                if(float(hits[j]['_score']) < 15):
-                    post_neg = hits['_source']['post']
-                    break
-                else:
-                    post_neg = hits['_source']['post']
-            #print(post_neg,  hits['_source']['originalPost'], hits['_score'])
-        '''
-        for j in range(length-1, -1, -1):
-            hits = es_res[j]
-            post_neg = hits['_source']['post']
-            neg_num += 1
-            print(post_neg,  hits['_source']['originalPost'], hits['_score'])
-            # 需要两个负列
-            if(neg_num == 20):
-               break;
-        '''
+                post_neg = hits['_source']['post']
+                
+                line = []
+                line.append(label)
+                line.append(query)
+                line.append(post)
+                line.append(post_neg)
+
+                res.append(line)
+
+                res2.append(query)
+                res2.append(post)
+                res2.append(post_neg)
+
+
         if(label=='-1'):
         #构建正例
             postdata = '{"query":{"bool":{"must":[{"match":{"post":"%s"}}, \
-                           {"term":{"originalPost.keyword":"%s"}}]}}}'%(post,ori)
+                           {"term":{"originalPost.keyword":"%s"}}]}}, "size":100}'%(post,ori)
             es_res = es.get_single_data(index, postdata)
-        #print(es_res)
             if len(es_res) == 0:
-                f.write(query+','+post+','+ori+','+provice+'\n')
+                f.write(query+','+ori+','+"lebel为-1没有正列。"+'\n')
                 continue
-            length = len(es_res)
-        #hits = es_res[0]
-        #post_pos = hits['_source']['post']
-        
 
-            for j in range(length-1, -1, -1):
+            for j in range(len(es_res)//3, len(es_res)//2):
                 hits = es_res[j]
                 post_pos = hits['_source']['post']
-            #print(post_pos,  hits['_source']['originalPost'])
-            #line.append(post)
-            # 只需要一个正列
-                break
-        line.append(label)
-        line.append(query)
-        if(label=='1'):
-            line.append(post)
-            line.append(post_neg)
-        else:
-            line.append(post_pos)
-            line.append(post)
-        res.append(line)
-        res2.append(query)
-        res2.append(post_pos)
-        res2.append(post_neg)
+                
+                line = []
+                line.append(label)
+                line.append(query)
+                line.append(post_pos)
+                line.append(post)
+                
+                res.append(line)
 
-        if n%1000 == 0:
+                res2.append(query)
+                res2.append(post_pos)
+                res2.append(post)
+
+        if n%100 == 0:
+            #break
             time.sleep(1)
 
     res = pd.DataFrame(res)
     res.columns=['label','query','post_pos','post_neg']
-    #res.columns=['query','post_pos','post_neg']
-
     res = res.sample(frac=1).reset_index(drop=True)
-    res.to_csv('9pairwise_train.tsv',index=False)
+    res.to_csv('pairwise_results_4row.tsv',index=False)
 
     res2 = pd.DataFrame(res2)
     res2.columns=['query']
     res2 = res2.sample(frac=1).reset_index(drop=True)
-    res2.to_csv('9pairwise_train2.tsv',index=False)
+    res2.to_csv('pairwise_results_1row.tsv',index=False)
+
     f.close()
+    print("done")

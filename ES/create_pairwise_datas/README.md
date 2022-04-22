@@ -13,4 +13,3 @@ body = '{"query":{"bool":{"must":[{"match":{"post":"%s"}}, "term":{"originalPost
 
 ## 3、输出数据格式
 有两种形式：1）三列分别为query	pos_post	neg_post; 2)一列，每三行表示一个sample
-
