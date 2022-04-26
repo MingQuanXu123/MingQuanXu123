@@ -1,0 +1,24 @@
+Host 203
+  HostName 192.168.98.203
+  Port 22
+  User xumingquan
+  IdentityFile ~/.ssh/id_rsa
+  IdentitiesOnly yes
+Host 216
+  HostName 192.168.98.216
+  Port 22
+  User xumingquan
+  IdentityFile ~/.ssh/id_rsa
+  IdentitiesOnly yes
+Host 217x
+  HostName 192.168.98.217
+  Port 22
+  User xumingquan
+  IdentityFile ~/.ssh/id_rsa
+  IdentitiesOnly yes
+Host 217d
+  HostName 192.168.98.217
+  Port 22
+  User lidongdong
+  IdentityFile ~/.ssh/id_rsa
+  IdentitiesOnly yes

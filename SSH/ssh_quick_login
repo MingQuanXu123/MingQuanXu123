@@ -1,0 +1,10 @@
+# ssh 快速登陆
+## 1、ssh-kengen -t rsa
+在~/.ssh/目录下生产rsa的public key和private key
+## 2、在~/.ssh/目录下建立一个名为config的文件
+
+## 3、把public key复制到目标主机
+ssh-copy-id -i ~/.ssh/id_rsa.pub hostname@X.X.X.X
+
+## 4、按照config的设置快速免密登陆
+ssh 203
